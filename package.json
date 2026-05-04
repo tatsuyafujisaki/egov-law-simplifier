@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@geolonia/japanese-numeral": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "gts": "latest",
+    "typescript": "latest"
+  }
+}
