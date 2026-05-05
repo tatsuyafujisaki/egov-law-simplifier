@@ -79,7 +79,7 @@ function processItems(paragraph: AnyObj, pKey: string): AnyObj {
     const subitems = processSubitems(item, iKey);
 
     if (Object.keys(subitems).length > 0) {
-      out[iKey] = { 号柱書: itemText, 細分: subitems };
+      out[iKey] = { 号柱書: itemText, ...subitems };
     } else {
       out[iKey] = { 号本文: itemText };
     }
@@ -139,7 +139,7 @@ function processArticle(article: AnyObj, lawTitle: string): void {
     const items = processItems(p, pKey);
 
     if (Object.keys(items).length > 0) {
-      paragraphsOutput[pKey] = { 項柱書: pText, 号: items };
+      paragraphsOutput[pKey] = { 項柱書: pText, ...items };
     } else {
       paragraphsOutput[pKey] = { 項本文: pText };
     }
@@ -156,7 +156,7 @@ function processArticle(article: AnyObj, lawTitle: string): void {
     articleCaption = '意思能力';
   }
 
-  const articleObj: AnyObj = { 項: paragraphsOutput };
+  const articleObj: AnyObj = { ...paragraphsOutput };
   if (articleCaption) articleObj.条見出し = articleCaption;
 
   articlesOutput[articleKey] = articleObj;
@@ -208,7 +208,7 @@ https
         const sanitizedLawTitle = lawTitle.replace(/[\\/:*?"<>|]/g, '_');
         fs.writeFileSync(
           `${sanitizedLawTitle}.json`,
-          JSON.stringify({ 法令名: lawTitle, 条: prefixLawTitle(sortArticles(articlesOutput), lawTitle) }, null, 2),
+          JSON.stringify({ 法令名: lawTitle, ...prefixLawTitle(sortArticles(articlesOutput), lawTitle) }, null, 2),
         );
       } catch (e) {
         console.error(e);
