@@ -49,37 +49,39 @@ function extractSentenceText(obj: AnyObj | undefined): string {
   return '';
 }
 
-function processSubitems(item: AnyObj): AnyObj {
+function processSubitems(item: AnyObj, iKey: string): AnyObj {
   const raw = item['Subitem1'];
   if (!raw) return {};
   const subitems = Array.isArray(raw) ? raw : [raw];
   const out: AnyObj = {};
   for (const sub of subitems as AnyObj[]) {
     if (!sub) continue;
-    const title = cleanText(sub['Subitem1Title']);
-    out[title] = { 細分本文: extractSentenceText(sub['Subitem1Sentence'] as AnyObj) };
+    const subTitle = cleanText(sub['Subitem1Title']);
+    const sKey = `${iKey}${subTitle}`;
+    out[sKey] = { 細分本文: extractSentenceText(sub['Subitem1Sentence'] as AnyObj) };
   }
   return out;
 }
 
-function processItems(paragraph: AnyObj): AnyObj {
+function processItems(paragraph: AnyObj, pKey: string): AnyObj {
   const raw = paragraph['Item'];
   if (!raw) return {};
   const items = Array.isArray(raw) ? raw : [raw];
   const out: AnyObj = {};
   for (const item of items as AnyObj[]) {
-    let title = cleanText(item['ItemTitle'])
+    let itemNum = cleanText(item['ItemTitle'])
       .replace(/^第/, '')
       .replace(/号$/, '');
-    if (title) title = normalizeNumericTitle(title);
+    if (itemNum) itemNum = normalizeNumericTitle(itemNum);
+    const iKey = `${pKey}第${itemNum}号`;
 
     const itemText = extractSentenceText(item['ItemSentence'] as AnyObj);
-    const subitems = processSubitems(item);
+    const subitems = processSubitems(item, iKey);
 
     if (Object.keys(subitems).length > 0) {
-      out[title] = { 号柱書: itemText, 細分: subitems };
+      out[iKey] = { 号柱書: itemText, 細分: subitems };
     } else {
-      out[title] = { 号本文: itemText };
+      out[iKey] = { 号本文: itemText };
     }
   }
   return out;
@@ -94,26 +96,26 @@ function parseParagraphNum(p: AnyObj): number {
 
 function buildArticleKey(articleTitle: string): string {
   return articleTitle.includes('の')
-    ? articleTitle.replace('の', '条の')
-    : articleTitle + '条';
+    ? '第' + articleTitle.replace('の', '条の')
+    : '第' + articleTitle + '条';
 }
 
 const articlesOutput: AnyObj = {};
 
-function extractArticles(obj: unknown): void {
+function extractArticles(obj: unknown, lawTitle: string): void {
   if (Array.isArray(obj)) {
-    obj.forEach(extractArticles);
+    obj.forEach(item => extractArticles(item, lawTitle));
   } else if (obj && typeof obj === 'object') {
     const node = obj as AnyObj;
     if (node['ArticleTitle'] && node['Paragraph']) {
-      processArticle(node);
+      processArticle(node, lawTitle);
     } else {
-      for (const key in node) extractArticles(node[key]);
+      for (const key in node) extractArticles(node[key], lawTitle);
     }
   }
 }
 
-function processArticle(article: AnyObj): void {
+function processArticle(article: AnyObj, lawTitle: string): void {
   let articleTitle = cleanText(article['ArticleTitle'])
     .replace(/^第/, '')
     .replace(/条/, '');
@@ -123,6 +125,8 @@ function processArticle(article: AnyObj): void {
     .replace(/^（/, '')
     .replace(/）$/, '');
 
+  const articleKey = buildArticleKey(articleTitle);
+
   const rawParagraph = article['Paragraph'];
   const paragraphs = Array.isArray(rawParagraph) ? rawParagraph : [rawParagraph];
   const paragraphsOutput: AnyObj = {};
@@ -131,12 +135,13 @@ function processArticle(article: AnyObj): void {
     if (!p) continue;
     const pNum = parseParagraphNum(p);
     const pText = extractSentenceText(p['ParagraphSentence'] as AnyObj);
-    const items = processItems(p);
+    const pKey = `${lawTitle}${articleKey}第${pNum}項`;
+    const items = processItems(p, pKey);
 
     if (Object.keys(items).length > 0) {
-      paragraphsOutput[String(pNum)] = { 項柱書: pText, 号: items };
+      paragraphsOutput[pKey] = { 項柱書: pText, 号: items };
     } else {
-      paragraphsOutput[String(pNum)] = { 項本文: pText };
+      paragraphsOutput[pKey] = { 項本文: pText };
     }
   }
 
@@ -154,7 +159,7 @@ function processArticle(article: AnyObj): void {
   const articleObj: AnyObj = { 項: paragraphsOutput };
   if (articleCaption) articleObj.条見出し = articleCaption;
 
-  articlesOutput[buildArticleKey(articleTitle)] = articleObj;
+  articlesOutput[articleKey] = articleObj;
 }
 
 function sortArticles(raw: AnyObj): AnyObj {
@@ -171,6 +176,14 @@ function sortArticles(raw: AnyObj): AnyObj {
     })
     .forEach(k => (sorted[k] = raw[k]));
   return sorted;
+}
+
+function prefixLawTitle(articles: AnyObj, lawTitle: string): AnyObj {
+  const out: AnyObj = {};
+  for (const key of Object.keys(articles)) {
+    out[`${lawTitle}${key}`] = articles[key];
+  }
+  return out;
 }
 
 https
@@ -190,12 +203,12 @@ https
           'output';
 
         const lawBody = law.LawBody as AnyObj;
-        if (lawBody?.MainProvision) extractArticles(lawBody.MainProvision);
+        if (lawBody?.MainProvision) extractArticles(lawBody.MainProvision, lawTitle);
 
         const sanitizedLawTitle = lawTitle.replace(/[\\/:*?"<>|]/g, '_');
         fs.writeFileSync(
           `${sanitizedLawTitle}.json`,
-          JSON.stringify({ 法令名: lawTitle, 条: sortArticles(articlesOutput) }, null, 2),
+          JSON.stringify({ 法令名: lawTitle, 条: prefixLawTitle(sortArticles(articlesOutput), lawTitle) }, null, 2),
         );
       } catch (e) {
         console.error(e);
