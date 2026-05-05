@@ -10,7 +10,9 @@ npm install
 node --experimental-strip-types src/main.ts <law-id>
 
 # For example:
-# node --experimental-strip-types src/main.ts 129AC0000000089
+# node --experimental-strip-types src/main.ts 129AC0000000089 # 民法
+# node --experimental-strip-types src/main.ts 132AC0000000048 # 商法
+# node --experimental-strip-types src/main.ts 417AC0000000086 # 会社法
 ```
 
 ## References
